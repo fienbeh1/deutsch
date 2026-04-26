@@ -1,0 +1,10 @@
+[Desktop Entry]
+Name=Deutsch Lernen
+Comment=German Learning Platform
+Exec=xdg-open http://localhost:3456
+Icon=deutsch
+Type=Application
+Categories=Education;Language;
+Keywords=german;learning;language;deutsch;
+StartupNotify=true
+Terminal=false

@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { BookOpen, Music, Layers, Play, Pause, ArrowLeft, ChevronRight, Volume2, Settings, BookCheck } from 'lucide-react'
 
-const API = window.location.origin + '/api'
+const API = 'http://localhost:3456/api'
 
 const COLORS = {
   dark: '#0d0d0d',
@@ -115,19 +115,14 @@ function CourseView({ curso, goBack }) {
 
   async function loadContent() {
     setLoading(true)
-    
-    // For Tangram (courses 4, 5, 6), fetch both books
-    const isTangram = [4, 5, 6].includes(curso.id)
-    
-    const [kb1, kb2, ab, aud, cds, tks] = await Promise.all([
+    const [kb, ab, aud, cds, tks] = await Promise.all([
       fetch(API + '/file/' + curso.id + '/kursbuch/1').then(r => r.json()),
-      isTangram ? fetch(API + '/file/' + curso.id + '/kursbuch/2').then(r => r.json()) : Promise.resolve({ exists: false }),
       fetch(API + '/file/' + curso.id + '/arbeitsbuch/1').then(r => r.json()),
       fetch(API + '/audio/list/' + curso.id).then(r => r.json()),
       fetch(API + '/audio/cds/' + curso.id).then(r => r.json()),
       fetch(API + '/themenkreise/' + curso.id).then(r => r.json())
     ])
-    setData({ kb: kb1, kb2: kb2, ab: ab, audio: aud || [], cds: cds || [], tks: tks || [] })
+    setData({ kb: kb, ab: ab, audio: aud || [], cds: cds || [], tks: tks || [] })
     if (cds?.length > 0) setSelectedCd(cds[0])
     setLoading(false)
   }
@@ -182,19 +177,17 @@ function CourseView({ curso, goBack }) {
   const tabs = isVerbos 
     ? [{ id: 'themenkreise', label: 'Übungen', icon: <Layers size={16} /> }]
     : [
-        { id: 'kursbuch', label: 'Lektion 1-4', icon: <BookOpen size={16} /> },
-        { id: 'kursbuch2', label: 'Lektion 5-8', icon: <BookOpen size={16} /> },
+        { id: 'themenkreise', label: 'Units', icon: <Layers size={16} /> },
+        { id: 'kursbuch', label: 'Kursbuch', icon: <BookOpen size={16} /> },
         { id: 'arbeitsbuch', label: 'Arbeitsbuch', icon: <BookOpen size={16} /> },
         { id: 'ejercicios', label: 'Ejercicios', icon: <BookCheck size={16} /> }
-      ].filter(t => t.id === 'ejercicios' || t.id === 'arbeitsbuch' || data.kb?.exists || data.kb2?.exists)
-      .filter(t => !t.id.includes('kursbuch') || (t.id === 'kursbuch' ? data.kb?.exists : data.kb2?.exists))
+      ].filter(t => t.id !== 'kursbuch' || data.kb?.exists)
 
   const showAudio = data.cds.length > 0
   const filteredAudio = selectedCd ? data.audio.filter(a => a.cd === selectedCd.label) : data.audio
 
-  const pdfTab = tab === 'kursbuch' ? 'kursbuch' : tab === 'kursbuch2' ? 'kursbuch' : tab === 'arbeitsbuch' ? 'arbeitsbuch' : null
-  const pdfFile = pdfTab === 'kursbuch' ? data.kb : pdfTab === 'kursbuch2' ? data.kb2 : data.ab
-  const pdfPg = tab === 'kursbuch2' ? '2' : '1'
+  const pdfTab = tab === 'kursbuch' ? 'kursbuch' : tab === 'arbeitsbuch' ? 'arbeitsbuch' : null
+  const pdfData = pdfTab === 'kursbuch' ? data.kb : data.ab
 
   return (
     <div style={{ display: 'flex', minHeight: '100vh', background: COLORS.dark }}>
@@ -335,11 +328,11 @@ function CourseView({ curso, goBack }) {
           )
         ) : tab === 'ejercicios' ? (
           <EjerciciosTab cursoId={curso.id} />
-        ) : pdfTab && pdfFile?.exists ? (
+        ) : pdfTab && pdfData?.exists ? (
           <div style={{ display: 'flex', gap: 24, height: 'calc(100vh - 180px)' }}>
             <div style={{ flex: 1, minWidth: 0 }}>
               <iframe 
-                src={pdfFile?.exists ? '/files/' + pdfFile.path.split('Deutsch als Fremdsprache/')[1] + '?pg=' + pdfPg : ''} 
+                src={'/files/' + pdfData.path.split('Deutsch als Fremdsprache/')[1]} 
                 style={{ width: '100%', height: '100%', background: COLORS.white, borderRadius: 12, border: 'none' }} 
               />
             </div>
@@ -476,18 +469,8 @@ function EjerciciosTab({ cursoId }) {
 
   function checkAnswer() {
     if (!selected) return
-    // Just show the answer - user types free text so exact match rarely works
+    const correct = selected.respuesta?.toLowerCase().trim() === answer.toLowerCase().trim()
     setShowAnswer(true)
-  }
-
-  // Check if partial answer is in user's input (lenient check)
-  function isCorrect() {
-    if (!selected?.respuesta || !answer) return false
-    const userAns = answer.toLowerCase().trim()
-    const correctAns = selected.respuesta.toLowerCase()
-    // Check if user's answer contains any significant word from correct answer
-    const words = correctAns.split(/\s+/).filter(w => w.length > 3)
-    return words.some(w => userAns.includes(w))
   }
 
   if (loading) return <div style={{ color: COLORS.textMuted, textAlign: 'center', padding: 60 }}>Loading exercises...</div>
@@ -550,14 +533,14 @@ function EjerciciosTab({ cursoId }) {
               disabled={showAnswer}
               style={{ 
                 padding: '12px 24px', borderRadius: 8, border: 'none',
-                background: COLORS.accent,
+                background: showAnswer ? (selected.respuesta?.toLowerCase().trim() === answer.toLowerCase().trim() ? COLORS.accent : '#ff4444') : COLORS.accent,
                 color: COLORS.dark, fontSize: 14, fontWeight: 600, cursor: 'pointer'
               }}
             >
-              {showAnswer ? 'Verificado' : 'Verificar'}
+              {showAnswer ? (selected.respuesta?.toLowerCase().trim() === answer.toLowerCase().trim() ? '✓ Correcto!' : '✗ Falso') : 'Verificar'}
             </button>
             
-            {showAnswer && selected.respuesta && (
+            {showAnswer && (
               <div style={{ marginTop: 24, padding: 16, background: '#1a3d1a', borderRadius: 8 }}>
                 <div style={{ fontSize: 12, color: COLORS.textMuted }}>Respuesta correcta:</div>
                 <div style={{ color: COLORS.accent, fontSize: 16, marginTop: 4 }}>{selected.respuesta}</div>

@@ -1,0 +1,7 @@
+node_modules/
+*.log
+pages/
+*.mp3
+*.pdf
+*.iso
+*.m4a
