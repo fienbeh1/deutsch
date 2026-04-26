@@ -1,6 +1,0 @@
-# Ignore everything
-*
-
-# But allow these
-!.gitignore
-!README.md
